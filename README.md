@@ -1,5 +1,5 @@
 Where do these files come from?
-|||
+
 |-------------|----------------------------------------------------------|
 | bootx64.efi | from ubuntu server iso /EFI/boot/bootx64.efi             |
 | initrd      | from ubuntu server iso /casper/initrd                    |
