@@ -8,8 +8,6 @@ Where do these files come from?
 | vmlinuz     | ubuntu server iso `/casper/vmlinuz`              |
 | grubx64.efi | `grub-efi-amd64-signed_*ubuntu*amd64.deb`        |
 
-.
-.
 
 ### ATTENTION!
 
