@@ -1,0 +1,12 @@
+Where do these files come from?
+
+bootx64.efi		  /mnt/EFI/boot/bootx64.efi                             from a mounted (/mnt) ubuntu server iso
+grubx64.efi               extrahiert aus grub-efi-amd64-signed_*ubuntu*amd64.deb in a multipass ubuntu server instance
+initrd			  /mnt/casper/initrd                                    from a mounted (/mnt) ubuntu server iso
+unicode.pf2               /mnt/boot/grub/fonts/unicode.pf2                      from a mounted (/mnt) ubuntu server iso
+vmlinuz			  /mnt/casper/vmlinuz                                   from a mounted (/mnt) ubuntu server iso
+
+
+ATTENTION!  download deb archives and extract files from them on the same hardware architecture that the clients will be booting from!
+	    e.g. note the difference between 'grubnetaa64.efi.signed' and 'grubnetx64.efi.signed'
+	    e.g. note that 'grubx64.efi' is a renamed 'grubnetx64.efi.signed' from a '...1ubuntu7.1_amd64.deb' package
