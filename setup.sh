@@ -5,7 +5,7 @@
 #  Install & Configure a PXE boot server with Canonical Multipass
 #
 #  For a detailed explanation, see the documentation at:
-#  Documents/IT/Infrastructure/DDI/IPv4 UEFI PXE Boot Server based on multipass.md
+#  ~/Documents/IT/Infrastructure/DDI/IPv4 UEFI PXE Boot Server based on multipass.md
 #
 #
 #  2025-02-15
@@ -17,6 +17,8 @@
 
 #  TODO
 #  Check if the $instance_files is necessary, or if that could be done with $tmp
+#    the idea was, to put everything on the host in $instance_files and mount this in the instance and link to the contents of the folder
+#    but it seems neither apache nor tftpd will resolve the links to these files. maybe permissions. maybe something else.
 
 
 
@@ -25,13 +27,14 @@
 #  --------------------------------------------------------------------------------------------------------------------
 
 
-#instance_ip  #  will be determined by Multipass at first start
+#instance_ip  #  will be determined (further down this script) by Multipass at first start
 instance_name=pxe-boot-server
 instance_files="$HOME/.config/multipass/$instance_name"
 #cloud_init_files="$HOME/Scripts/bash/debian/config/ubuntu/user-data-multipass"
-local_network='192.168.254.0'
+
+local_subnet='192.168.254'  #  last octet is missing by design
 local_gateway='192.168.254.254'
-domain='internal'
+domain='internal'  #  as defined by https://datatracker.ietf.org/doc/html/draft-davies-internal-tld-02, 2025-02-02
 server_fqdn=${instance_name}.${domain}
 
 pxe_boot_file=bootx64.efi
@@ -43,13 +46,13 @@ pxe_boot_file=bootx64.efi
 #  --------------------------------------------------------------------------------------------------------------------
 
 
-#  enable Multipass to bridge the local instances network interfaces
-#  to that network interface of the host, that provides internet access
+#  enable Multipass to bridge the instance's network interface
+#  to the host's network interface, which provides internet access
 #
-#  do not do this indiscriminately, as the multipassd will sometimes hang afterwards
-#  fix problems with a reboot or `launchctl bootout ...`
-if [[ ! $(multipass get local.bridged-network) ]]
-then multipass set local.bridged-network=$(netstat -rnf inet | sed -n 's/.* UG.* \([a-z].*\)/\1/p')
+#  this might cause `multipassd` to hang
+#  fix with a reboot of the host, or `launchctl bootout ...`
+if [[ "$(multipass get local.bridged-network)" == "<empty>" ]]
+then multipass set local.bridged-network="$(netstat -rnf inet | sed -n 's/.* UG.* \([a-z].*\)/\1/p')"
 fi
 
 
@@ -76,6 +79,7 @@ multipass launch  --name "$instance_name"  --bridged  --mount "$instance_files" 
 #  update the Multipass instance & restart
 #####################multipass exec "$instance_name" -- sudo apt-get --update --auto-remove --purge --yes full-upgrade
 multipass exec "$instance_name" -- sudo reboot
+sleep 10
 
 #  the IP is only available now, after the Multipass instance has started once and been assigned its' IPv4's by the host.
 while [[ -z "$instance_ip" ]]
@@ -109,13 +113,13 @@ multipass exec "$instance_name" -- bash -c "sudo tee /etc/dhcp/dhcpd.conf > /dev
 	option ip-forwarding false;
 	option mask-supplier false;
 
-	subnet $local_network netmask 255.255.255.0 {
+	subnet ${local_subnet}.0 netmask 255.255.255.0 {
 	    option routers $local_gateway;
 	    option domain-name-servers 127.0.0.1;
-	    range ${local_network::-2}.4 ${local_network::-2}.6;
+	    range ${local_subnet}.4 ${local_subnet}.6;
 
 	    #  IPv4 address of the TFTP service which PXE clients should connect to
-	    #  == the address of the this Multipass instance network interface, that connects to the local network
+	    #  == the address of the this Multipass instance's network interface, that connects to the local network
 	    next-server $(multipass ls | awk -v instance="$instance_name" '$1 == instance && $2 == "Running" {getline; print $NF}');
 
 	    #  filename of the initial boot file which PXE clients should request from the TFTP service
@@ -139,12 +143,12 @@ multipass exec "$instance_name" -- sudo systemctl status isc-dhcp-server.service
 #  install
 multipass exec "$instance_name" -- sudo apt --yes install tftpd-hpa
 #  configure
-multipass exec "$instance_name" -- bash -c "sudo tee /etc/default/tftpd-hpa > /dev/null <<- EOF
-	TFTP_USERNAME=tftp
-	TFTP_DIRECTORY=$(multipass exec "$instance_name" -- pwd)/$instance_name
-	TFTP_ADDRESS=:69
-	TFTP_OPTIONS=--secure
-EOF"
+############################multipass exec "$instance_name" -- bash -c "sudo tee /etc/default/tftpd-hpa > /dev/null <<- EOF
+############################	TFTP_USERNAME=tftp
+############################	TFTP_DIRECTORY=$(multipass exec "$instance_name" -- pwd)/$instance_name
+############################	TFTP_ADDRESS=:69
+############################	TFTP_OPTIONS=--secure
+############################EOF"
 #  enable and start
 multipass exec "$instance_name" -- sudo systemctl --quiet --now enable tftpd-hpa
 #  check
@@ -184,4 +188,4 @@ EOF"
 multipass exec "$instance_name" -- sudo systemctl --quiet --now enable apache2
 #  check
 multipass exec "$instance_name" -- sudo systemctl status apache2
-open http://$instance_ip/cloud-init
+open "http://$instance_ip/cloud-init"
