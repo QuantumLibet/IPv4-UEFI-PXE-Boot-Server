@@ -8,17 +8,13 @@
 #  ~/Documents/IT/Infrastructure/DDI/IPv4 UEFI PXE Boot Server based on multipass.md
 #
 #
-#  2025-02-15
+#  2025-03-01
 #
 #  scripts.bash@brigehead.it
 #
 #  --------------------------------------------------------------------------------------------------------------------
 
 
-#  TODO
-#  Check if the $instance_files is necessary, or if that could be done with $tmp
-#    the idea was, to put everything on the host in $instance_files and mount this in the instance and link to the contents of the folder
-#    but it seems neither apache nor tftpd will resolve the links to these files. maybe permissions. maybe something else.
 
 
 
@@ -50,7 +46,7 @@ pxe_boot_file=bootx64.efi
 #  to the host's network interface, which provides internet access
 #
 #  this might cause `multipassd` to hang
-#  fix with a reboot of the host, or `launchctl bootout ...`
+#  fix with a reboot of the host, or `sudo --askpass launchctl bootout system /Library/LaunchDaemons/com.canonical.multipassd.plist` and `bootstrap`
 if [[ "$(multipass get local.bridged-network)" == "<empty>" ]]
 then multipass set local.bridged-network="$(netstat -rnf inet | sed -n 's/.* UG.* \([a-z].*\)/\1/p')"
 fi
@@ -77,14 +73,13 @@ multipass launch  --name "$instance_name"  --bridged  --mount "$instance_files" 
 #multipass launch  --name "$instance_name"  --bridged  --mount "$instance_files" --cloud-init "$cloud_init_files" lts
 
 #  update the Multipass instance & restart
-#####################multipass exec "$instance_name" -- sudo apt-get --update --auto-remove --purge --yes full-upgrade
+multipass exec "$instance_name" -- sudo apt-get --update --auto-remove --purge --yes full-upgrade
 multipass exec "$instance_name" -- sudo reboot
-sleep 10
 
 #  the IP is only available now, after the Multipass instance has started once and been assigned its' IPv4's by the host.
 while [[ -z "$instance_ip" ]]
 do
-    sleep 1
+    sleep 10
     instance_ip=$(multipass ls | awk -v instance="$instance_name" '$1 == instance && $2 == "Running" {getline; print $NF}')
 done
 sleep 1
@@ -98,7 +93,6 @@ sleep 1
 
 #  install
 multipass exec "$instance_name" -- sudo apt --yes install isc-dhcp-server
-
 #  configure
 multipass exec "$instance_name" -- bash -c "sudo tee /etc/dhcp/dhcpd.conf > /dev/null <<- EOF
 	#  DHCP server properties
@@ -126,10 +120,8 @@ multipass exec "$instance_name" -- bash -c "sudo tee /etc/dhcp/dhcpd.conf > /dev
 	    filename \"$pxe_boot_file\";
 }
 EOF"
-
 #  enable and start
 multipass exec "$instance_name" -- sudo systemctl --quiet --now enable isc-dhcp-server.service
-
 #  check
 multipass exec "$instance_name" -- sudo systemctl status isc-dhcp-server.service
 
@@ -143,12 +135,7 @@ multipass exec "$instance_name" -- sudo systemctl status isc-dhcp-server.service
 #  install
 multipass exec "$instance_name" -- sudo apt --yes install tftpd-hpa
 #  configure
-############################multipass exec "$instance_name" -- bash -c "sudo tee /etc/default/tftpd-hpa > /dev/null <<- EOF
-############################	TFTP_USERNAME=tftp
-############################	TFTP_DIRECTORY=$(multipass exec "$instance_name" -- pwd)/$instance_name
-############################	TFTP_ADDRESS=:69
-############################	TFTP_OPTIONS=--secure
-############################EOF"
+multipass exec "$instance_name" -- sudo sed -i "s|\(TFTP_DIRECTORY=\"\).*\(.\)$|\1$(multipass exec $instance_name -- pwd)/$instance_name/tftp\"|" /etc/default/tftpd-hpa
 #  enable and start
 multipass exec "$instance_name" -- sudo systemctl --quiet --now enable tftpd-hpa
 #  check
@@ -162,30 +149,23 @@ multipass exec "$instance_name" -- sudo systemctl status tftpd-hpa
 
 
 #  install
-multipass exec "$instance_name" -- sudo apt --yes install apache2
+multipass exec "$instance_name" -- sudo apt --yes install lighttpd
 #  configure
-multipass exec "$instance_name" -- bash -c "sudo tee /etc/apache2/sites-available/${instance_name}.conf > /dev/null <<- EOF
-	<VirtualHost *:80>
-	    ServerName $server_fqdn
-
-	    ErrorLog  ${APACHE_LOG_DIR}/${server_fqdn/./_}-error_log
-	    CustomLog ${APACHE_LOG_DIR}/${server_fqdn/./_}-access_log common
-
-	    <Directory /var/www/html/cloud-init>
-	        Options Indexes MultiViews
-	        AllowOverride All
-	        Require all granted
-	    </Directory>
-
-	    <Directory /var/www/html/repository>
-	        Options Indexes MultiViews
-	        AllowOverride All
-	        Require all granted
-	    </Directory>
-	</VirtualHost>
-EOF"
+multipass exec "$instance_name" -- sudo sed -i "s|\(server.document-root .*= \"\).*\(.\)$|\1$(multipass exec $instance_name -- pwd)/$instance_name/http\"|" /etc/lighttpd/lighttpd.conf
 #  enable and start
-multipass exec "$instance_name" -- sudo systemctl --quiet --now enable apache2
+multipass exec "$instance_name" -- sudo systemctl --quiet --now enable lighttpd
 #  check
-multipass exec "$instance_name" -- sudo systemctl status apache2
+multipass exec "$instance_name" -- sudo systemctl status lighttpd
+
+
+
+#  --------------------------------------------------------------------------------------------------------------------
+#  PROVISION FILES
+#  --------------------------------------------------------------------------------------------------------------------
+
+
+git clone --depth=1 https://github.com/QuantumLibet/IPv4-UEFI-PXE-Boot-Server.git
+sudo rsync --archive IPv4-UEFI-PXE-Boot-Server/tftp/ /srv/tftp/
+sudo rsync --archive IPv4-UEFI-PXE-Boot-Server/html/ /var/www/html/
+
 open "http://$instance_ip/cloud-init"
