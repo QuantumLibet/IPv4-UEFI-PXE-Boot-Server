@@ -1,0 +1,123 @@
+set default=0
+set timeout=-1
+
+set gfxmode=auto
+terminal_output gfxterm
+
+loadfont unicode
+
+set menu_color_normal=white/black
+set menu_color_highlight=black/dark-gray
+set color_normal=white/black
+
+background_color 44,0,30
+background_image grub/wallpaper/flow.png
+
+clear
+
+set http_repository=http://192.168.254.61/repository
+set http_cloud_init=http://192.168.254.61/cloud-init
+
+
+set debug=all
+
+menuentry 'test' {
+	set gfxpayload=text
+	echo "insmod part_gpt"
+	insmod part_gpt
+	echo "insmod ext2"
+	insmod ext2
+	echo "insmod loopback"
+	insmod loopback
+
+	set iso_file=Ubuntu_24_x64/ubuntu-24.04.1-live-server-amd64.iso
+	echo $iso_file
+
+	echo "loopback"
+	loopback loop (tftp)/$iso_file
+	echo "linux"
+	linux   (loop)/casper/vmlinuz boot=casper
+	echo "initrd"
+	initrd  (loop)/casper/initrd
+	echo "boot"
+	boot
+}
+
+
+menuentry 'TinyCore' {
+	set gfxpayload=keep
+
+	echo "Loading kernel..."
+	linux TinyCore/vmlinuz
+
+	echo "Loading initrd..."
+	initrd TinyCore/core.gz
+}
+
+
+menuentry 'grml' {
+	set gfxpayload=keep
+
+	echo "Loading kernel..."
+	linux grml/vmlinuz
+
+	echo "Loading initrd..."
+	initrd grml/initrd.img
+}
+
+
+menuentry 'Ubuntu 24.04.1 x64 - cloud-init install' {
+	set gfxpayload=keep
+	set vt_handoff=vt.handoff=7
+
+	echo "Loading kernel..."
+	linux Ubuntu_24_x64/vmlinuz ip=dhcp url=${http_repository}/Ubuntu_24_x64/ubuntu-24.04.1-live-server-amd64.iso autoinstall ds=nocloud-net\;s=${http_cloud_init}/ cloud-config-url=/dev/null fsck.mode=skip
+
+	echo "Loading initrd..."
+	initrd Ubuntu_24_x64/initrd
+}
+
+
+menuentry 'Ubuntu 24.04.2 x64 - cloud-init install' {
+	set gfxpayload=keep
+	set vt_handoff=vt.handoff=7
+
+	echo "Loading kernel..."
+	linux Ubuntu_24_x64/vmlinuz ip=dhcp url=${http_repository}/Ubuntu_24_x64/ubuntu-24.04.2-live-server-amd64.iso autoinstall ds=nocloud-net\;s=${http_cloud_init}/ cloud-config-url=/dev/null fsck.mode=skip
+
+	echo "Loading initrd..."
+	initrd Ubuntu_24_x64/initrd
+}
+
+
+menuentry "Windows 11 c't Notfall-Kit" {
+	echo "huhu"
+}
+
+
+menuentry 'GParted' {
+	#linux vmlinuz ip=dhcp url=${http_repository}/gparted/gparted-live-1.7.0-1-amd64.iso
+	#initrd initrd
+}
+
+
+if [ "${grub_platform}" == "efi" ]
+menuentry "UEFI Firmware Settings" {
+	fwsetup
+}
+fi
+
+
+menuentry "Reboot from local device" {
+	exit
+}
+
+
+menuentry 'Reboot' {
+	reboot
+}
+
+
+menuentry 'Shutdown' {
+	halt
+}

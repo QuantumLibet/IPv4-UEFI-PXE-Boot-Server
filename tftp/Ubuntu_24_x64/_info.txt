@@ -3,6 +3,7 @@ Where do these files come from?
 bootx64.efi		  /mnt/EFI/boot/bootx64.efi                             from a mounted (/mnt) ubuntu server iso
 grubx64.efi               extrahiert aus grub-efi-amd64-signed_*ubuntu*amd64.deb in a multipass ubuntu server instance
 initrd			  /mnt/casper/initrd                                    from a mounted (/mnt) ubuntu server iso
+unicode.pf2               /mnt/boot/grub/fonts/unicode.pf2                      from a mounted (/mnt) ubuntu server iso
 vmlinuz			  /mnt/casper/vmlinuz                                   from a mounted (/mnt) ubuntu server iso
 
 
